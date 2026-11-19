@@ -1,267 +1,243 @@
-// Page wiring for the Vice Cover Maker editor.
-// Keeps one small state object, loads the scene plates and the display
-// font up front, repaints on every control change, and exports the
-// canvas as a PNG. Everything runs locally — no network calls beyond
-// the app's own static files.
-import { COVER_SIZES, drawCover } from './cover.js';
+// Vice Cover Maker editor wiring.
+// Reads chosen photos with FileReader (never uploads), keeps per-panel
+// state (image, offset, scale), draws the cover via cover.js and
+// grade.js, supports drag-to-move and wheel/slider zoom per panel, and
+// exports the canvas as a PNG download at the chosen size.
 
-const canvas = document.getElementById('coverCanvas');
-const sizePick = document.getElementById('sizePick');
-const gradePick = document.getElementById('gradePick');
-const titleField = document.getElementById('titleField');
-const captionField = document.getElementById('captionField');
-const photoScale = document.getElementById('photoScale');
-const photoLift = document.getElementById('photoLift');
-const choosePhotoBtn = document.getElementById('choosePhotoBtn');
-const photoInput = document.getElementById('photoInput');
-const sampleBoulevardBtn = document.getElementById('sampleBoulevard');
-const samplePierBtn = document.getElementById('samplePier');
-const exportBtn = document.getElementById('exportBtn');
-const statusLine = document.getElementById('statusLine');
-const plateButtons = Array.from(document.querySelectorAll('.seg-btn[data-plate]'));
+import { drawCover, panelAtPoint, PANEL_COUNT } from "./cover.js";
+
+const canvas = document.getElementById("coverCanvas");
+const ctx = canvas.getContext("2d");
+const photoInput = document.getElementById("photoInput");
+const captionInput = document.getElementById("captionInput");
+const subtitleInput = document.getElementById("subtitleInput");
+const gradeSelect = document.getElementById("gradeSelect");
+const sizeSelect = document.getElementById("sizeSelect");
+const panelSelect = document.getElementById("panelSelect");
+const zoomRange = document.getElementById("zoomRange");
+const zoomValue = document.getElementById("zoomValue");
+const statusLine = document.getElementById("statusLine");
 
 const state = {
-  sizeKey: 'landscape',
-  plateKey: 'sunset',
-  grade: 'sunset',
-  title: titleField.value,
-  caption: '',
-  photoSize: Number(photoScale.value),
-  photoY: Number(photoLift.value),
+  width: 1080,
+  height: 1080,
+  caption: captionInput.value,
+  subtitle: subtitleInput.value,
+  grade: gradeSelect.value,
+  panels: Array.from({ length: PANEL_COUNT }, () => ({ image: null, offsetX: 0, offsetY: 0, scale: 1 })),
 };
 
-const assets = {
-  plates: { sunset: null, neon: null },
-  photo: null,
-};
+let selectedPanel = 0;
+let dragging = null;
 
-let shotMode = null;
-
-function say(message) {
-  statusLine.textContent = message;
+function setStatus(text) {
+  statusLine.textContent = text;
 }
 
 function render() {
-  drawCover(canvas, state, assets);
-  if (shotMode) {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.__shotReady = true;
-      });
-    });
-  }
+  canvas.width = state.width;
+  canvas.height = state.height;
+  drawCover(ctx, state);
 }
 
-function loadImage(src) {
-  return new Promise((resolvePromise, rejectPromise) => {
+function syncZoomControl() {
+  const pct = Math.round((state.panels[selectedPanel].scale || 1) * 100);
+  zoomRange.value = String(pct);
+  zoomValue.textContent = pct + "%";
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolvePromise(img);
-    img.onerror = () => rejectPromise(new Error(`Could not load ${src}`));
-    img.src = src;
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
   });
 }
 
-function loadPhotoFromUrl(src, label) {
-  return loadImage(src)
-    .then((img) => {
-      assets.photo = img;
-      render();
-      say(label);
-    })
-    .catch(() => {
-      say('That photo could not be loaded. Try another image file.');
-    });
+function assignPhoto(image, startPanel) {
+  // One photo fills every panel; several photos fill panels in order.
+  for (let i = 0; i < PANEL_COUNT; i++) {
+    const target = state.panels[(startPanel + i) % PANEL_COUNT];
+    if (!target.image || i === 0) {
+      target.image = image;
+      target.offsetX = 0;
+      target.offsetY = 0;
+      target.scale = 1;
+    }
+  }
 }
 
-function loadPhotoFromFile(file) {
-  if (!file || !file.type.startsWith('image/')) {
-    say('Please choose an image file for the photo.');
+photoInput.addEventListener("change", async () => {
+  const files = Array.from(photoInput.files || []);
+  if (files.length === 0) return;
+  setStatus("Loading " + files.length + " photo(s)…");
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(files[i]);
+      });
+      const img = await loadImageFromDataUrl(dataUrl);
+      if (files.length === 1) {
+        assignPhoto(img, 0);
+      } else {
+        const panel = state.panels[i % PANEL_COUNT];
+        panel.image = img;
+        panel.offsetX = 0;
+        panel.offsetY = 0;
+        panel.scale = 1;
+      }
+    }
+    render();
+    setStatus("Photo(s) loaded. Drag inside a panel to reposition.");
+  } catch {
+    setStatus("Could not read that photo — please try another file.");
+  }
+});
+
+async function loadSample(path, label) {
+  try {
+    const img = await loadImageFromDataUrl(path);
+    assignPhoto(img, 0);
+    render();
+    setStatus(label + " sample loaded into every panel.");
+  } catch {
+    setStatus("Sample photo could not be loaded.");
+  }
+}
+
+document.getElementById("useSamplePier").addEventListener("click", () => loadSample("samples/pier.jpg", "Pier"));
+document.getElementById("useSampleBoulevard").addEventListener("click", () => loadSample("samples/boulevard.jpg", "Boulevard"));
+
+captionInput.addEventListener("input", () => { state.caption = captionInput.value; render(); });
+subtitleInput.addEventListener("input", () => { state.subtitle = subtitleInput.value; render(); });
+gradeSelect.addEventListener("change", () => { state.grade = gradeSelect.value; render(); });
+
+sizeSelect.addEventListener("change", () => {
+  const [w, h] = sizeSelect.value.split("x").map(Number);
+  state.width = w;
+  state.height = h;
+  render();
+});
+
+panelSelect.addEventListener("change", () => {
+  selectedPanel = Number(panelSelect.value);
+  syncZoomControl();
+});
+
+zoomRange.addEventListener("input", () => {
+  state.panels[selectedPanel].scale = Number(zoomRange.value) / 100;
+  zoomValue.textContent = zoomRange.value + "%";
+  render();
+});
+
+document.getElementById("centerPanel").addEventListener("click", () => {
+  state.panels[selectedPanel].offsetX = 0;
+  state.panels[selectedPanel].offsetY = 0;
+  render();
+});
+
+document.getElementById("fillAll").addEventListener("click", () => {
+  const source = state.panels[selectedPanel];
+  if (!source.image) {
+    setStatus("Load a photo first, then fill every panel.");
     return;
   }
-  const url = URL.createObjectURL(file);
-  loadImage(url)
-    .then((img) => {
-      assets.photo = img;
-      render();
-      say(`Photo loaded: ${file.name}. Looking sharp — export when ready.`);
-    })
-    .catch(() => {
-      say('That photo could not be loaded. Try another image file.');
-    })
-    .finally(() => URL.revokeObjectURL(url));
+  for (const panel of state.panels) {
+    panel.image = source.image;
+    panel.offsetX = 0;
+    panel.offsetY = 0;
+    panel.scale = 1;
+  }
+  render();
+  setStatus("One photo now fills every panel.");
+});
+
+function canvasPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) * (canvas.width / rect.width),
+    y: (event.clientY - rect.top) * (canvas.height / rect.height),
+  };
 }
 
-function setPlate(key, syncGrade) {
-  if (key !== 'sunset' && key !== 'neon') return;
-  state.plateKey = key;
-  if (syncGrade) {
-    state.grade = key;
-    gradePick.value = key;
-  }
-  for (const btn of plateButtons) {
-    const active = btn.dataset.plate === key;
-    btn.classList.toggle('is-active', active);
-    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-  }
-}
+canvas.addEventListener("pointerdown", (event) => {
+  const point = canvasPoint(event);
+  const index = panelAtPoint(state.width, state.height, point.x, point.y);
+  if (index < 0) return;
+  selectedPanel = index;
+  panelSelect.value = String(index);
+  syncZoomControl();
+  dragging = { index, lastX: point.x, lastY: point.y };
+  canvas.setPointerCapture(event.pointerId);
+});
 
-function applyQuery() {
-  const params = new URLSearchParams(window.location.search);
-  const size = params.get('size');
-  if (size && Object.hasOwn(COVER_SIZES, size)) {
-    state.sizeKey = size;
-    sizePick.value = size;
-  }
-  const plate = params.get('plate');
-  if (plate === 'sunset' || plate === 'neon') setPlate(plate, false);
-  const grade = params.get('grade');
-  if (grade === 'sunset' || grade === 'neon' || grade === 'none') {
-    state.grade = grade;
-    gradePick.value = grade;
-  }
-  const title = params.get('title');
-  if (title !== null) {
-    state.title = title.slice(0, 60);
-    titleField.value = state.title;
-  }
-  const caption = params.get('caption');
-  if (caption !== null) {
-    state.caption = caption.slice(0, 48);
-    captionField.value = state.caption;
-  }
-  const shot = params.get('shot');
-  if (shot === 'cover' || shot === 'editor') {
-    shotMode = shot;
-    if (shot === 'cover') document.body.classList.add('shot-cover');
-  }
-  const sample = params.get('sample');
-  const photo = params.get('photo');
-  const wanted = photo || sample;
-  if (wanted && /^[a-z0-9-]+$/i.test(wanted)) {
-    return loadPhotoFromUrl(`samples/${wanted}.jpg`, `Sample photo loaded: ${wanted}.`);
-  }
-  return Promise.resolve();
-}
-
-sizePick.addEventListener('change', () => {
-  state.sizeKey = sizePick.value;
+canvas.addEventListener("pointermove", (event) => {
+  if (!dragging) return;
+  const point = canvasPoint(event);
+  const panel = state.panels[dragging.index];
+  panel.offsetX += point.x - dragging.lastX;
+  panel.offsetY += point.y - dragging.lastY;
+  dragging.lastX = point.x;
+  dragging.lastY = point.y;
   render();
 });
 
-gradePick.addEventListener('change', () => {
-  state.grade = gradePick.value;
-  render();
-});
+canvas.addEventListener("pointerup", () => { dragging = null; });
+canvas.addEventListener("pointercancel", () => { dragging = null; });
 
-titleField.addEventListener('input', () => {
-  state.title = titleField.value;
-  render();
-});
-
-captionField.addEventListener('input', () => {
-  state.caption = captionField.value;
-  render();
-});
-
-photoScale.addEventListener('input', () => {
-  state.photoSize = Number(photoScale.value);
-  render();
-});
-
-photoLift.addEventListener('input', () => {
-  state.photoY = Number(photoLift.value);
-  render();
-});
-
-for (const btn of plateButtons) {
-  btn.addEventListener('click', () => {
-    setPlate(btn.dataset.plate, true);
-    render();
-  });
-}
-
-choosePhotoBtn.addEventListener('click', () => photoInput.click());
-
-photoInput.addEventListener('change', () => {
-  const [file] = photoInput.files;
-  if (file) loadPhotoFromFile(file);
-  photoInput.value = '';
-});
-
-sampleBoulevardBtn.addEventListener('click', () => {
-  loadPhotoFromUrl('samples/boulevard.jpg', 'Sample photo loaded: boulevard.');
-});
-
-samplePierBtn.addEventListener('click', () => {
-  loadPhotoFromUrl('samples/pier.jpg', 'Sample photo loaded: pier.');
-});
-
-let dragDepth = 0;
-window.addEventListener('dragenter', (event) => {
+canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
-  dragDepth += 1;
-  document.body.classList.add('dragging');
-});
-window.addEventListener('dragover', (event) => {
-  event.preventDefault();
-});
-window.addEventListener('dragleave', (event) => {
-  event.preventDefault();
-  dragDepth = Math.max(0, dragDepth - 1);
-  if (dragDepth === 0) document.body.classList.remove('dragging');
-});
-window.addEventListener('drop', (event) => {
-  event.preventDefault();
-  dragDepth = 0;
-  document.body.classList.remove('dragging');
-  const file = event.dataTransfer && event.dataTransfer.files[0];
-  if (file) loadPhotoFromFile(file);
-});
+  const panel = state.panels[selectedPanel];
+  const next = Math.min(3, Math.max(0.6, (panel.scale || 1) + (event.deltaY < 0 ? 0.05 : -0.05)));
+  panel.scale = next;
+  syncZoomControl();
+  render();
+}, { passive: false });
 
-exportBtn.addEventListener('click', () => {
+document.getElementById("exportBtn").addEventListener("click", () => {
   render();
   canvas.toBlob((blob) => {
     if (!blob) {
-      say('Export failed — please try again.');
+      setStatus("Export failed — please try again.");
       return;
     }
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.download = `vice-cover-${state.sizeKey}.png`;
-    document.body.appendChild(link);
+    link.download = "vice-cover-" + state.width + "x" + state.height + ".png";
     link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    say(`Exported PNG at ${canvas.width} x ${canvas.height}. Check your downloads.`);
-  }, 'image/png');
+    URL.revokeObjectURL(url);
+    setStatus("PNG exported at " + state.width + " x " + state.height + ".");
+  }, "image/png");
 });
 
-async function start() {
-  say('Loading scenes and type…');
-  const fontReady = Promise.race([
-    (async () => {
-      try {
-        await document.fonts.load('400 80px Anton');
-        await document.fonts.ready;
-      } catch {
-        // Fall back to the system stack; the cover still renders.
-      }
-    })(),
-    new Promise((resolvePromise) => setTimeout(resolvePromise, 2500)),
-  ]);
-  const platesReady = Promise.allSettled([
-    loadImage('plates/sunset.jpg').then((img) => { assets.plates.sunset = img; }),
-    loadImage('plates/neon.jpg').then((img) => { assets.plates.neon = img; }),
-  ]);
-  await Promise.all([fontReady, platesReady]);
-  render();
-  say('Ready. Add a photo, tweak the words, then export your cover.');
-  await applyQuery();
+async function bootFromQuery() {
+  // Screenshot helper: ?shot=cover|editor&photo=pier|boulevard&caption=…&grade=…
+  const params = new URLSearchParams(location.search);
+  const photo = params.get("photo");
+  const caption = params.get("caption");
+  const grade = params.get("grade");
+  if (caption) {
+    state.caption = caption;
+    captionInput.value = caption;
+  }
+  if (grade === "neon" || grade === "sunset") {
+    state.grade = grade;
+    gradeSelect.value = grade;
+  }
+  if (photo === "pier" || photo === "boulevard") {
+    await loadSample("samples/" + photo + ".jpg", photo);
+  }
   render();
 }
 
-start().catch(() => {
-  render();
-  say('Something hiccuped while loading, but the editor is still usable.');
-});
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => bootFromQuery());
+} else {
+  bootFromQuery();
+}
+render();

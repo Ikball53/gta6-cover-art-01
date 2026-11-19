@@ -1,258 +1,145 @@
-// Cover painter: turns the editor state plus loaded images into the
-// finished poster on a canvas. Fully deterministic — identical inputs
-// always paint identical pixels, which the PNG export relies on.
-import { applyGrade, photoFilter, plateFilter } from './grade.js';
+// Cover composition for Vice Cover Maker.
+// A multi-panel poster: one large hero panel on the left, three smaller
+// stacked panels on the right, bold caption lettering across the bottom.
+// Every panel photo is cropped to fill its panel (cover-fit) with a
+// per-panel offset and scale the editor controls.
 
-export const COVER_SIZES = {
-  landscape: { w: 1920, h: 1080 },
-  portrait: { w: 1080, h: 1350 },
-  square: { w: 1080, h: 1080 },
-};
+import { applyGrade } from "./grade.js";
 
-const FONT_STACK = '"Anton", "Arial Narrow", sans-serif';
+export const PANEL_COUNT = 4;
+const GAP = 10;
 
-function wrapWords(ctx, text, maxWidth) {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [];
-  const lines = [];
-  let current = words[0];
-  for (let i = 1; i < words.length; i += 1) {
-    const trial = `${current} ${words[i]}`;
-    if (ctx.measureText(trial).width <= maxWidth) {
-      current = trial;
-    } else {
-      lines.push(current);
-      current = words[i];
-    }
-  }
-  lines.push(current);
-  return lines;
+export function panelRects(width, height) {
+  // Caption band occupies the bottom 24% of the cover.
+  const bandH = Math.round(height * 0.24);
+  const artH = height - bandH;
+  const heroW = Math.round(width * 0.62);
+  const sideX = heroW + GAP;
+  const sideW = width - sideX;
+  const sideH = Math.floor((artH - GAP * 2) / 3);
+  return [
+    { x: 0, y: 0, w: heroW, h: artH },
+    { x: sideX, y: 0, w: sideW, h: sideH },
+    { x: sideX, y: sideH + GAP, w: sideW, h: sideH },
+    { x: sideX, y: (sideH + GAP) * 2, w: sideW, h: artH - (sideH + GAP) * 2 },
+  ];
 }
 
-// Largest Anton size whose wrapped title fits the width, the three-line
-// cap and the 30%-of-height block cap. Binary search keeps it fast even
-// on the 1920-wide canvas.
-function fitTitle(ctx, rawTitle, canvasW, canvasH) {
-  const text = (rawTitle || '').toUpperCase().trim();
-  const maxWidth = canvasW * 0.92;
-  const maxBlockH = canvasH * 0.3;
-  if (!text) return { lines: [], size: 0, lineH: 0, blockH: 0 };
-
-  const fits = (size) => {
-    ctx.font = `${size}px ${FONT_STACK}`;
-    const lines = wrapWords(ctx, text, maxWidth);
-    if (lines.length > 3) return null;
-    const lineH = size * 1.06;
-    if (lines.length * lineH > maxBlockH) return null;
-    for (const line of lines) {
-      if (ctx.measureText(line).width > maxWidth) return null;
-    }
-    return lines;
-  };
-
-  let lo = 10;
-  let hi = Math.floor(canvasW * 0.42);
-  let best = null;
-  let bestSize = lo;
-  while (lo <= hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    const lines = fits(mid);
-    if (lines) {
-      best = lines;
-      bestSize = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
+export function panelAtPoint(width, height, px, py) {
+  const rects = panelRects(width, height);
+  for (let i = 0; i < rects.length; i++) {
+    const r = rects[i];
+    if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return i;
   }
-  if (!best) {
-    ctx.font = `${lo}px ${FONT_STACK}`;
-    best = wrapWords(ctx, text, maxWidth).slice(0, 3);
-    bestSize = lo;
-  }
-  const lineH = bestSize * 1.06;
-  return { lines: best, size: bestSize, lineH, blockH: best.length * lineH };
+  return -1;
 }
 
-function paintOutlinedLine(ctx, line, x, y, size) {
-  ctx.font = `${size}px ${FONT_STACK}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-  ctx.shadowBlur = Math.max(6, size * 0.12);
-  ctx.shadowOffsetY = Math.max(2, size * 0.04);
-  ctx.strokeStyle = '#12060d';
-  ctx.lineWidth = Math.max(4, size * 0.14);
-  ctx.strokeText(line, x, y);
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(line, x, y);
-}
-
-function roundedPath(ctx, x, y, w, h, r) {
-  const radius = Math.min(r, w / 2, h / 2);
+export function drawPanelPhoto(ctx, panel, rect) {
+  ctx.save();
   ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.arcTo(x + w, y, x + w, y + radius, radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
-  ctx.lineTo(x + radius, y + h);
-  ctx.arcTo(x, y + h, x, y + h - radius, radius);
-  ctx.lineTo(x, y + radius);
-  ctx.arcTo(x, y, x + radius, y, radius);
-  ctx.closePath();
-}
-
-// Source rectangle that makes `img` cover a dw x dh box. biasY picks how
-// much of the vertical overflow is trimmed from the top (0 = keep top).
-function coverSource(img, dw, dh, biasY) {
-  const sw = img.naturalWidth || img.width;
-  const sh = img.naturalHeight || img.height;
-  const scale = Math.max(dw / sw, dh / sh);
-  const srcW = dw / scale;
-  const srcH = dh / scale;
-  const sx = (sw - srcW) / 2;
-  const sy = (sh - srcH) * biasY;
-  return { sx, sy, srcW, srcH };
-}
-
-function paintPlate(ctx, img, w, h, grade) {
-  if (!img) return;
-  const { sx, sy, srcW, srcH } = coverSource(img, w, h, 1);
-  ctx.save();
-  ctx.filter = plateFilter(grade);
-  ctx.drawImage(img, sx, sy, srcW, srcH, 0, 0, w, h);
-  ctx.restore();
-}
-
-function paintPhoto(ctx, img, box, grade) {
-  const { x, y, w, h } = box;
-  const radius = Math.max(10, w * 0.035);
-  ctx.save();
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-  ctx.shadowBlur = Math.max(12, w * 0.05);
-  ctx.shadowOffsetY = Math.max(6, h * 0.04);
-  roundedPath(ctx, x, y, w, h, radius);
-  ctx.fillStyle = '#000000';
-  ctx.fill();
-  ctx.restore();
-
-  ctx.save();
-  roundedPath(ctx, x, y, w, h, radius);
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
   ctx.clip();
-  ctx.filter = photoFilter(grade);
-  const { sx, sy, srcW, srcH } = coverSource(img, w, h, 0.18);
-  ctx.drawImage(img, sx, sy, srcW, srcH, x, y, w, h);
-  ctx.restore();
 
-  ctx.save();
-  roundedPath(ctx, x, y, w, h, radius);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
-  ctx.lineWidth = Math.max(2, w * 0.004);
-  ctx.stroke();
+  if (!panel || !panel.image) {
+    // Empty panel: deep plum placeholder with a diagonal sheen.
+    const fill = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+    fill.addColorStop(0, "#2a1748");
+    fill.addColorStop(1, "#150a26");
+    ctx.fillStyle = fill;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    ctx.restore();
+    return;
+  }
+
+  const img = panel.image;
+  const scale = Math.max(rect.w / img.width, rect.h / img.height) * (panel.scale || 1);
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  const dx = rect.x + (rect.w - dw) / 2 + (panel.offsetX || 0);
+  const dy = rect.y + (rect.h - dh) / 2 + (panel.offsetY || 0);
+  ctx.drawImage(img, dx, dy, dw, dh);
   ctx.restore();
 }
 
-function paintPlaceholder(ctx, box) {
-  const { x, y, w, h } = box;
-  const radius = Math.max(10, w * 0.035);
+export function drawPanelBorders(ctx, width, height) {
+  const rects = panelRects(width, height);
   ctx.save();
-  roundedPath(ctx, x, y, w, h, radius);
-  ctx.fillStyle = 'rgba(10, 6, 18, 0.42)';
-  ctx.fill();
-  ctx.setLineDash([Math.max(8, w * 0.02), Math.max(6, w * 0.014)]);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.lineWidth = Math.max(2, w * 0.004);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  const size = Math.max(18, w * 0.055);
-  ctx.font = `${size}px ${FONT_STACK}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-  ctx.fillText('Add your photo', x + w / 2, y + h / 2);
+  ctx.strokeStyle = "rgba(246, 236, 255, 0.9)";
+  ctx.lineWidth = Math.max(3, Math.round(width * 0.004));
+  for (const r of rects) {
+    ctx.strokeRect(r.x + ctx.lineWidth / 2, r.y + ctx.lineWidth / 2, r.w - ctx.lineWidth, r.h - ctx.lineWidth);
+  }
   ctx.restore();
 }
 
-export function drawCover(canvas, state, assets) {
-  const dims = COVER_SIZES[state.sizeKey] || COVER_SIZES.landscape;
-  const W = dims.w;
-  const H = dims.h;
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-
+export function drawCaption(ctx, width, height, caption, subtitle, gradeName) {
+  const bandH = Math.round(height * 0.24);
+  const bandY = height - bandH;
   ctx.save();
-  ctx.filter = 'none';
-  ctx.fillStyle = '#0a0614';
-  ctx.fillRect(0, 0, W, H);
-  ctx.restore();
 
-  const plate = assets && assets.plates ? assets.plates[state.plateKey] : null;
-  paintPlate(ctx, plate, W, H, state.grade);
-  applyGrade(ctx, W, H, state.grade);
-
-  // Title block, centred near the top.
-  const title = fitTitle(ctx, state.title, W, H);
-  const titleTop = H * 0.045;
-  ctx.save();
-  title.lines.forEach((line, i) => {
-    const cy = titleTop + title.lineH * (i + 0.5);
-    paintOutlinedLine(ctx, line, W / 2, cy, title.size);
-  });
-  ctx.restore();
-  const titleBottom = title.lines.length ? titleTop + title.blockH : H * 0.06;
-
-  // Caption size is decided before the photo so the photo zone can sit
-  // cleanly between the title and the caption.
-  const captionText = (state.caption || '').trim();
-  let captionSize = 0;
-  let captionH = 0;
-  if (captionText) {
-    const start = title.size > 0 ? Math.round(title.size * 0.4) : Math.round(H * 0.05);
-    captionSize = Math.max(14, start);
-    ctx.save();
-    while (captionSize > 12) {
-      ctx.font = `${captionSize}px ${FONT_STACK}`;
-      if (ctx.measureText(captionText.toUpperCase()).width <= W * 0.92) break;
-      captionSize -= 2;
-    }
-    ctx.restore();
-    captionH = captionSize * 1.25;
+  // Caption band backdrop.
+  const band = ctx.createLinearGradient(0, bandY, width, height);
+  if (gradeName === "neon") {
+    band.addColorStop(0, "#120826");
+    band.addColorStop(1, "#2b0a3a");
+  } else {
+    band.addColorStop(0, "#2b1030");
+    band.addColorStop(1, "#571d3d");
   }
-  const captionZoneTop = captionText ? H - H * 0.045 - captionH : H - H * 0.04;
+  ctx.fillStyle = band;
+  ctx.fillRect(0, bandY, width, bandH);
 
-  // Photo inset (or its placeholder) between title and caption.
-  const photoW = (Math.min(80, Math.max(30, state.photoSize || 52)) / 100) * W;
-  const photoH = photoW * 0.62;
-  const zoneTop = titleBottom + H * 0.03;
-  const zoneBottom = captionZoneTop - H * 0.025;
-  const travel = Math.max(0, zoneBottom - zoneTop - photoH);
-  const lift = Math.min(100, Math.max(0, state.photoY ?? 42)) / 100;
-  const photoBox = {
-    x: (W - photoW) / 2,
-    y: zoneTop + travel * lift,
-    w: photoW,
-    h: photoH,
-  };
-  const photo = assets ? assets.photo : null;
-  if (photo) paintPhoto(ctx, photo, photoBox, state.grade);
-  else paintPlaceholder(ctx, photoBox);
+  // Accent rule above the title.
+  const rule = ctx.createLinearGradient(0, 0, width, 0);
+  rule.addColorStop(0, "#ff9a3d");
+  rule.addColorStop(0.5, "#ff4e7a");
+  rule.addColorStop(1, "#27e6ff");
+  ctx.fillStyle = rule;
+  ctx.fillRect(0, bandY, width, Math.max(4, Math.round(height * 0.006)));
 
-  if (captionText) {
-    ctx.save();
-    paintOutlinedLine(
-      ctx,
-      captionText.toUpperCase(),
-      W / 2,
-      H - H * 0.045 - captionH / 2,
-      captionSize,
-    );
-    ctx.restore();
+  const title = (caption || "VICE COVER").toUpperCase();
+  let fontSize = Math.round(bandH * 0.52);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const setTitleFont = (size) => { ctx.font = size + "px Anton, Impact, sans-serif"; };
+  setTitleFont(fontSize);
+  const maxW = width * 0.92;
+  while (ctx.measureText(title).width > maxW && fontSize > 12) {
+    fontSize -= 4;
+    setTitleFont(fontSize);
   }
+
+  const titleY = subtitle ? bandY + bandH * 0.42 : bandY + bandH * 0.52;
+  ctx.lineWidth = Math.max(2, fontSize * 0.06);
+  ctx.strokeStyle = "rgba(10, 4, 20, 0.85)";
+  ctx.strokeText(title, width / 2, titleY);
+  const titleGrad = ctx.createLinearGradient(0, titleY - fontSize / 2, 0, titleY + fontSize / 2);
+  titleGrad.addColorStop(0, "#fff3d6");
+  titleGrad.addColorStop(0.55, "#ffb35c");
+  titleGrad.addColorStop(1, "#ff4e7a");
+  ctx.fillStyle = titleGrad;
+  ctx.fillText(title, width / 2, titleY);
+
+  if (subtitle) {
+    const subSize = Math.max(12, Math.round(bandH * 0.16));
+    ctx.font = subSize + "px Anton, Impact, sans-serif";
+    ctx.fillStyle = "#f6ecff";
+    ctx.fillText(subtitle.toUpperCase(), width / 2, bandY + bandH * 0.78);
+  }
+  ctx.restore();
+}
+
+export function drawCover(ctx, state) {
+  const { width, height, panels, caption, subtitle, grade } = state;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#0a0514";
+  ctx.fillRect(0, 0, width, height);
+
+  const rects = panelRects(width, height);
+  for (let i = 0; i < PANEL_COUNT; i++) {
+    drawPanelPhoto(ctx, panels[i], rects[i]);
+  }
+  applyGrade(ctx, grade, width, height - Math.round(height * 0.24));
+  drawPanelBorders(ctx, width, height);
+  drawCaption(ctx, width, height, caption, subtitle, grade);
 }

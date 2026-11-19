@@ -1,101 +1,72 @@
-// Colour-grade helpers for the cover painter.
-// Two small filter lookups plus one overlay painter. Everything here is
-// pure canvas work: no state is kept between calls, so the same inputs
-// always produce the same pixels.
+// Colour grades for Vice Cover Maker.
+// Each grade is applied with canvas compositing after the photos are drawn:
+// overlay gradients plus a soft-light wash, so the photo detail stays visible.
 
-// Filter applied to the full-bleed scene plate before overlays go on.
-export function plateFilter(grade) {
-  if (grade === 'sunset') {
-    return 'saturate(1.18) contrast(1.04) brightness(1.02) sepia(0.22)';
-  }
-  if (grade === 'neon') {
-    return 'saturate(1.45) contrast(1.16) brightness(1.03) hue-rotate(-8deg)';
-  }
-  return 'none';
-}
-
-// Gentler version of the same idea for the user's photo inset, so faces
-// and detail stay readable while still sitting inside the scene's light.
-export function photoFilter(grade) {
-  if (grade === 'sunset') {
-    return 'saturate(1.08) contrast(1.02) sepia(0.12)';
-  }
-  if (grade === 'neon') {
-    return 'saturate(1.18) contrast(1.07) hue-rotate(-4deg)';
-  }
-  return 'none';
-}
-
-function vignette(ctx, w, h) {
-  const cx = w / 2;
-  const cy = h / 2;
-  const outer = Math.hypot(cx, cy);
-  const g = ctx.createRadialGradient(cx, cy, outer * 0.42, cx, cy, outer);
-  g.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  g.addColorStop(0.72, 'rgba(0, 0, 0, 0.08)');
-  g.addColorStop(1, 'rgba(0, 0, 0, 0.42)');
+export function applySunsetGrade(ctx, width, height) {
   ctx.save();
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
-}
 
-function sunsetWash(ctx, w, h) {
-  ctx.save();
-  ctx.globalCompositeOperation = 'soft-light';
-  const wash = ctx.createLinearGradient(0, 0, 0, h);
-  wash.addColorStop(0, 'rgba(255, 92, 168, 0.85)');
-  wash.addColorStop(0.38, 'rgba(255, 140, 66, 0.8)');
-  wash.addColorStop(0.72, 'rgba(255, 94, 98, 0.65)');
-  wash.addColorStop(1, 'rgba(96, 44, 160, 0.85)');
-  ctx.fillStyle = wash;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
+  // Warm sky-to-sea gradient: amber at the top, rose in the middle, plum below.
+  const sky = ctx.createLinearGradient(0, 0, 0, height);
+  sky.addColorStop(0, "rgba(255, 154, 61, 0.34)");
+  sky.addColorStop(0.45, "rgba(255, 78, 122, 0.26)");
+  sky.addColorStop(1, "rgba(58, 16, 84, 0.38)");
+  ctx.globalCompositeOperation = "overlay";
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, width, height);
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  const glow = ctx.createRadialGradient(
-    w * 0.5, h * 0.62, 0,
-    w * 0.5, h * 0.62, Math.max(w, h) * 0.62,
-  );
-  glow.addColorStop(0, 'rgba(255, 176, 92, 0.34)');
-  glow.addColorStop(0.45, 'rgba(255, 120, 92, 0.14)');
-  glow.addColorStop(1, 'rgba(255, 120, 92, 0)');
+  // Sun glow from the upper corner.
+  const glow = ctx.createRadialGradient(width * 0.78, height * 0.12, 0, width * 0.78, height * 0.12, width * 0.75);
+  glow.addColorStop(0, "rgba(255, 214, 120, 0.45)");
+  glow.addColorStop(1, "rgba(255, 214, 120, 0)");
+  ctx.globalCompositeOperation = "soft-light";
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(0, 0, width, height);
+
+  // Gentle vignette to push the caption band forward.
+  const shade = ctx.createLinearGradient(0, height * 0.55, 0, height);
+  shade.addColorStop(0, "rgba(10, 4, 20, 0)");
+  shade.addColorStop(1, "rgba(10, 4, 20, 0.42)");
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, width, height);
+
   ctx.restore();
 }
 
-function neonWash(ctx, w, h) {
+export function applyNeonGrade(ctx, width, height) {
   ctx.save();
-  ctx.globalCompositeOperation = 'soft-light';
-  const split = ctx.createLinearGradient(0, 0, w, h);
-  split.addColorStop(0, 'rgba(20, 230, 220, 0.9)');
-  split.addColorStop(0.42, 'rgba(24, 60, 180, 0.85)');
-  split.addColorStop(0.72, 'rgba(70, 24, 150, 0.8)');
-  split.addColorStop(1, 'rgba(230, 40, 180, 0.9)');
+
+  // Magenta from the left, cyan from the right — classic night-neon split.
+  const split = ctx.createLinearGradient(0, 0, width, 0);
+  split.addColorStop(0, "rgba(255, 46, 166, 0.30)");
+  split.addColorStop(0.5, "rgba(90, 20, 160, 0.12)");
+  split.addColorStop(1, "rgba(39, 230, 255, 0.30)");
+  ctx.globalCompositeOperation = "overlay";
   ctx.fillStyle = split;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
+  ctx.fillRect(0, 0, width, height);
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  const glow = ctx.createRadialGradient(
-    w * 0.28, h * 0.3, 0,
-    w * 0.28, h * 0.3, Math.max(w, h) * 0.58,
-  );
-  glow.addColorStop(0, 'rgba(32, 235, 225, 0.3)');
-  glow.addColorStop(0.5, 'rgba(32, 160, 255, 0.12)');
-  glow.addColorStop(1, 'rgba(32, 160, 255, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, w, h);
+  // Deep night wash at the bottom for caption contrast.
+  const night = ctx.createLinearGradient(0, 0, 0, height);
+  night.addColorStop(0, "rgba(8, 6, 40, 0.10)");
+  night.addColorStop(1, "rgba(8, 6, 40, 0.48)");
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.fillStyle = night;
+  ctx.fillRect(0, 0, width, height);
+
+  const shade = ctx.createLinearGradient(0, height * 0.55, 0, height);
+  shade.addColorStop(0, "rgba(4, 2, 16, 0)");
+  shade.addColorStop(1, "rgba(4, 2, 16, 0.46)");
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, width, height);
+
   ctx.restore();
 }
 
-// Paint the grade's light over whatever is already on the canvas.
-// The vignette always runs, even when the grade itself is 'none'.
-export function applyGrade(ctx, w, h, grade) {
-  if (grade === 'sunset') sunsetWash(ctx, w, h);
-  else if (grade === 'neon') neonWash(ctx, w, h);
-  vignette(ctx, w, h);
+export function applyGrade(ctx, gradeName, width, height) {
+  if (gradeName === "neon") {
+    applyNeonGrade(ctx, width, height);
+  } else {
+    applySunsetGrade(ctx, width, height);
+  }
 }
