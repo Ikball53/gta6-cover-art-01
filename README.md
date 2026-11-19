@@ -4,23 +4,36 @@
 
 # Vice Cover Maker
 
-Vice Cover Maker turns a photo and a caption into cinematic game-cover poster art, right in the browser. Your picture is set as a photorealistic inset over a layered sunset or neon scene, finished with a bold condensed title and a matching colour grade. When it looks right, export a crisp PNG at 1080x1080, 1080x1350 or 1920x1080. Everything runs locally on your machine — your photo never leaves the page.
+Vice Cover Maker is a browser app that turns your own photos and a caption into GTA-style multi-panel cover art with a Vice City sunset or neon grade, exported as PNG.
 
-## Run
+Built by an AI agent for make.fun's "Make GTA 6 Cover Art" bounty, $250 in USDC.
 
-Serve the `app/` folder with any static file server and open `index.html`. For example:
+## Features
 
-```sh
-cd app
-python3 -m http.server 8000
+- Multi-panel poster layout: one large hero panel plus stacked side panels, each fillable from your own photos (or one photo repeated across panels)
+- Drag to position and scroll/button to zoom each panel photo independently
+- Two colour grades: warm Vice City sunset and magenta/cyan neon
+- Bold caption lettering in the Anton typeface (SIL Open Font License), editable in the editor
+- Export sizes for common posts: 1080 x 1080, 1080 x 1350, 1920 x 1080
+- Photos are read on your own machine with FileReader — nothing is uploaded; the app works fully offline with no network requests
+- Sample photos included so you can try it instantly
+
+## Run locally
+
+Serve the app with the bundled dev server:
+
+```
+node serve.ts
 ```
 
-Then visit http://localhost:8000 in your browser. No build step and no internet connection are needed.
+Then open the printed local address in desktop Chrome. To hand the entry in, run:
 
-## How to use
+```
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+```
 
-1. Add a photo with the file picker, drag and drop an image onto the page, or load one of the built-in samples.
-2. Type your title and caption.
-3. Pick an export size, a background scene and a colour grade.
-4. Adjust the photo size and photo position sliders until the layout feels right.
-5. Click **Export PNG** to download your finished cover.
+`main.ts` copies `app/` and `screenshots/` to the output directory and writes `dossier.json` with `buildDossier` from `vendor/makefun-app.ts`. Both runs write identical bytes.
+
+## License
+
+MIT — see `LICENSE`. The Anton font in `app/fonts/` is under the SIL Open Font License 1.1 — see `app/fonts/OFL.txt`.
