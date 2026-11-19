@@ -5,78 +5,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vice Cover Maker</title>
 <link rel="stylesheet" href="style.css">
+<style>
+@font-face {
+  font-family: "Anton";
+  src: url("fonts/Anton-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+</style>
 </head>
 <body>
 <header class="topbar">
-  <span class="brand-mark" aria-hidden="true"></span>
-  <div class="brand-text">
-    <h1 class="brand-title">Vice Cover Maker</h1>
-    <p class="brand-tag">Turn a photo into bold poster cover art.</p>
-  </div>
+  <h1 class="brand">VICE COVER MAKER</h1>
+  <p class="tagline">Turn your photos into GTA-style cover art — sunset or neon, exported as PNG.</p>
 </header>
+
 <main class="layout">
-  <section class="stage-col" aria-label="Cover preview">
-    <div class="stage-frame">
-      <canvas id="coverCanvas" width="1920" height="1080"></canvas>
-    </div>
-    <p class="drop-hint">Drop a photo anywhere to use it</p>
+  <section class="stage">
+    <canvas id="coverCanvas" width="1080" height="1080"></canvas>
+    <p class="hint">Drag a photo inside its panel to move it. Use the panel zoom slider or mouse wheel over the canvas to scale the selected panel.</p>
   </section>
-  <aside class="panel" aria-label="Cover controls">
-    <div class="ctrl-block">
-      <label class="ctrl-label" for="sizePick">Export size</label>
-      <select id="sizePick" class="field">
-        <option value="landscape" selected>Landscape 1920 x 1080</option>
-        <option value="portrait">Portrait 1080 x 1350</option>
-        <option value="square">Square 1080 x 1080</option>
-      </select>
+
+  <aside class="controls">
+    <div class="group">
+      <h2>Photos</h2>
+      <label class="file-label">Add photos (one fills every panel)
+        <input id="photoInput" type="file" accept="image/*" multiple>
+      </label>
+      <div class="row">
+        <button id="useSamplePier" type="button">Sample: Pier</button>
+        <button id="useSampleBoulevard" type="button">Sample: Boulevard</button>
+      </div>
+      <p class="note">Photos are read on your machine only — never uploaded.</p>
     </div>
-    <div class="ctrl-block">
-      <span class="ctrl-label" id="sceneLabel">Background scene</span>
-      <div class="seg-control" role="group" aria-labelledby="sceneLabel">
-        <button type="button" class="seg-btn is-active" data-plate="sunset" aria-pressed="true">Sunset Beach</button>
-        <button type="button" class="seg-btn" data-plate="neon" aria-pressed="false">Neon Street</button>
+
+    <div class="group">
+      <h2>Caption</h2>
+      <label>Cover title
+        <input id="captionInput" type="text" value="SUNSET HEIST" maxlength="42">
+      </label>
+      <label>Subtitle (optional)
+        <input id="subtitleInput" type="text" value="VICE CITY STORIES" maxlength="48">
+      </label>
+    </div>
+
+    <div class="group">
+      <h2>Look</h2>
+      <label>Colour grade
+        <select id="gradeSelect">
+          <option value="sunset" selected>Vice City sunset</option>
+          <option value="neon">Neon magenta / cyan</option>
+        </select>
+      </label>
+      <label>Export size
+        <select id="sizeSelect">
+          <option value="1080x1080" selected>Square — 1080 x 1080</option>
+          <option value="1080x1350">Portrait — 1080 x 1350</option>
+          <option value="1920x1080">Landscape — 1920 x 1080</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="group">
+      <h2>Panels</h2>
+      <label>Selected panel
+        <select id="panelSelect">
+          <option value="0">Hero panel</option>
+          <option value="1">Panel 2</option>
+          <option value="2">Panel 3</option>
+          <option value="3">Panel 4</option>
+        </select>
+      </label>
+      <label>Zoom <span id="zoomValue">100%</span>
+        <input id="zoomRange" type="range" min="60" max="300" value="100">
+      </label>
+      <div class="row">
+        <button id="centerPanel" type="button">Center photo</button>
+        <button id="fillAll" type="button">Use one photo everywhere</button>
       </div>
     </div>
-    <div class="ctrl-block">
-      <span class="ctrl-label" id="photoLabel">Photo</span>
-      <div class="btn-row" role="group" aria-labelledby="photoLabel">
-        <button type="button" id="choosePhotoBtn" class="file-btn">Choose a photo</button>
-        <input type="file" id="photoInput" accept="image/*" hidden>
-      </div>
-      <div class="btn-row">
-        <button type="button" id="sampleBoulevard" class="ghost-btn">Sample: Boulevard</button>
-        <button type="button" id="samplePier" class="ghost-btn">Sample: Pier</button>
-      </div>
-      <p class="mini-hint">You can also drag and drop an image file onto the page.</p>
-    </div>
-    <div class="ctrl-block">
-      <label class="ctrl-label" for="photoScale">Photo size</label>
-      <input type="range" id="photoScale" class="slider" min="30" max="80" value="52" step="1">
-    </div>
-    <div class="ctrl-block">
-      <label class="ctrl-label" for="photoLift">Photo position</label>
-      <input type="range" id="photoLift" class="slider" min="0" max="100" value="42" step="1">
-    </div>
-    <div class="ctrl-block">
-      <label class="ctrl-label" for="titleField">Title</label>
-      <input type="text" id="titleField" class="field" value="GRAND THEFT AUTO VI" maxlength="60" autocomplete="off">
-    </div>
-    <div class="ctrl-block">
-      <label class="ctrl-label" for="captionField">Caption</label>
-      <input type="text" id="captionField" class="field" maxlength="48" placeholder="Your caption" autocomplete="off">
-    </div>
-    <div class="ctrl-block">
-      <label class="ctrl-label" for="gradePick">Colour grade</label>
-      <select id="gradePick" class="field">
-        <option value="sunset" selected>Sunset</option>
-        <option value="neon">Neon</option>
-        <option value="none">None</option>
-      </select>
-    </div>
-    <button type="button" id="exportBtn" class="export-btn">Export PNG</button>
-    <p id="statusLine" class="status-line" role="status" aria-live="polite">Loading…</p>
+
+    <button id="exportBtn" class="export" type="button">Export PNG</button>
+    <p id="statusLine" class="status" role="status"></p>
   </aside>
 </main>
+
+<footer class="foot">Vice Cover Maker — an original cover-art toy. Not affiliated with Rockstar Games.</footer>
+
 <script type="module" src="src/main.js"></script>
 </body>
 </html>
