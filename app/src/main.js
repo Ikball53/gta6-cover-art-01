@@ -1,276 +1,267 @@
-// Page wiring for Vice Cover Maker.
-// Reads the controls, loads the scene plates and photos from local
-// files, and keeps the canvas preview in step with every change.
+// Page wiring for the Vice Cover Maker editor.
+// Keeps one small state object, loads the scene plates and the display
+// font up front, repaints on every control change, and exports the
+// canvas as a PNG. Everything runs locally — no network calls beyond
+// the app's own static files.
+import { COVER_SIZES, drawCover } from './cover.js';
 
-import { drawCover, COVER_SIZES } from "./cover.js";
-
-const canvas = document.getElementById("coverCanvas");
-const sizeSelect = document.getElementById("sizeSelect");
-const gradeSelect = document.getElementById("gradeSelect");
-const titleInput = document.getElementById("titleInput");
-const captionInput = document.getElementById("captionInput");
-const photoSizeInput = document.getElementById("photoSize");
-const photoYInput = document.getElementById("photoY");
-const photoInput = document.getElementById("photoInput");
-const exportBtn = document.getElementById("exportBtn");
-const statusLine = document.getElementById("statusLine");
-const plateButtons = Array.prototype.slice.call(document.querySelectorAll("[data-plate]"));
-
-const PLATE_PATHS = {
-  sunset: "plates/sunset.jpg",
-  neon: "plates/neon.jpg"
-};
-
-const SAMPLE_PATHS = {
-  boulevard: "samples/boulevard.jpg",
-  pier: "samples/pier.jpg"
-};
+const canvas = document.getElementById('coverCanvas');
+const sizePick = document.getElementById('sizePick');
+const gradePick = document.getElementById('gradePick');
+const titleField = document.getElementById('titleField');
+const captionField = document.getElementById('captionField');
+const photoScale = document.getElementById('photoScale');
+const photoLift = document.getElementById('photoLift');
+const choosePhotoBtn = document.getElementById('choosePhotoBtn');
+const photoInput = document.getElementById('photoInput');
+const sampleBoulevardBtn = document.getElementById('sampleBoulevard');
+const samplePierBtn = document.getElementById('samplePier');
+const exportBtn = document.getElementById('exportBtn');
+const statusLine = document.getElementById('statusLine');
+const plateButtons = Array.from(document.querySelectorAll('.seg-btn[data-plate]'));
 
 const state = {
-  sizeKey: "landscape",
-  plate: "sunset",
-  grade: "sunset",
-  title: "GRAND THEFT AUTO VI",
-  caption: "",
-  photoSize: 52,
-  photoY: 42
+  sizeKey: 'landscape',
+  plateKey: 'sunset',
+  grade: 'sunset',
+  title: titleField.value,
+  caption: '',
+  photoSize: Number(photoScale.value),
+  photoY: Number(photoLift.value),
 };
 
 const assets = {
-  plateImg: null,
-  photoImg: null
+  plates: { sunset: null, neon: null },
+  photo: null,
 };
 
-let plateImages = {};
-let fontReady = false;
+let shotMode = null;
 
-function setStatus(message) {
+function say(message) {
   statusLine.textContent = message;
 }
 
 function render() {
   drawCover(canvas, state, assets);
-}
-
-function renderWhenReady() {
-  if (fontReady) {
-    render();
+  if (shotMode) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.__shotReady = true;
+      });
+    });
   }
 }
 
 function loadImage(src) {
-  return new Promise(function (resolve, reject) {
+  return new Promise((resolvePromise, rejectPromise) => {
     const img = new Image();
-    img.onload = function () { resolve(img); };
-    img.onerror = function () { reject(new Error("Could not load " + src)); };
+    img.onload = () => resolvePromise(img);
+    img.onerror = () => rejectPromise(new Error(`Could not load ${src}`));
     img.src = src;
   });
 }
 
-function syncPlateButtons() {
-  for (const btn of plateButtons) {
-    const active = btn.getAttribute("data-plate") === state.plate;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-pressed", active ? "true" : "false");
-  }
+function loadPhotoFromUrl(src, label) {
+  return loadImage(src)
+    .then((img) => {
+      assets.photo = img;
+      render();
+      say(label);
+    })
+    .catch(() => {
+      say('That photo could not be loaded. Try another image file.');
+    });
 }
 
-function setPlate(plateKey, followGrade) {
-  state.plate = plateKey;
-  assets.plateImg = plateImages[plateKey] || null;
-  if (followGrade) {
-    state.grade = plateKey;
-    gradeSelect.value = plateKey;
-  }
-  syncPlateButtons();
-  renderWhenReady();
-}
-
-function setPhotoImage(img, label) {
-  assets.photoImg = img;
-  renderWhenReady();
-  if (label) {
-    setStatus(label);
-  }
-}
-
-function loadSample(sampleKey) {
-  const path = SAMPLE_PATHS[sampleKey];
-  if (!path) {
-    return;
-  }
-  loadImage(path).then(function (img) {
-    setPhotoImage(img, "Sample photo loaded. Drag the sliders to frame it.");
-  }).catch(function () {
-    setStatus("That sample photo could not be loaded.");
-  });
-}
-
-function loadPhotoFile(file) {
-  if (!file || !file.type || file.type.indexOf("image/") !== 0) {
-    setStatus("Please choose an image file.");
+function loadPhotoFromFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    say('Please choose an image file for the photo.');
     return;
   }
   const url = URL.createObjectURL(file);
-  loadImage(url).then(function (img) {
-    setPhotoImage(img, "Photo loaded. It stays on your machine.");
-  }).catch(function () {
-    setStatus("That photo could not be read.");
-  });
+  loadImage(url)
+    .then((img) => {
+      assets.photo = img;
+      render();
+      say(`Photo loaded: ${file.name}. Looking sharp — export when ready.`);
+    })
+    .catch(() => {
+      say('That photo could not be loaded. Try another image file.');
+    })
+    .finally(() => URL.revokeObjectURL(url));
 }
 
-function applyQueryParams() {
-  const params = new URLSearchParams(window.location.search);
-  const sizeParam = params.get("size");
-  if (sizeParam && COVER_SIZES[sizeParam]) {
-    state.sizeKey = sizeParam;
-    sizeSelect.value = sizeParam;
+function setPlate(key, syncGrade) {
+  if (key !== 'sunset' && key !== 'neon') return;
+  state.plateKey = key;
+  if (syncGrade) {
+    state.grade = key;
+    gradePick.value = key;
   }
-  const plateParam = params.get("plate");
-  if (plateParam === "sunset" || plateParam === "neon") {
-    state.plate = plateParam;
-    state.grade = plateParam;
-  }
-  const gradeParam = params.get("grade");
-  if (gradeParam === "sunset" || gradeParam === "neon" || gradeParam === "none") {
-    state.grade = gradeParam;
-  }
-  gradeSelect.value = state.grade;
-  const titleParam = params.get("title");
-  if (titleParam !== null) {
-    state.title = titleParam;
-    titleInput.value = titleParam;
-  }
-  const captionParam = params.get("caption");
-  if (captionParam !== null) {
-    state.caption = captionParam;
-    captionInput.value = captionParam;
-  }
-  const sampleParam = params.get("sample");
-  if (sampleParam === "boulevard" || sampleParam === "pier") {
-    loadSample(sampleParam);
-  }
-}
-
-function bindControls() {
-  sizeSelect.addEventListener("change", function () {
-    state.sizeKey = sizeSelect.value;
-    renderWhenReady();
-  });
-
-  gradeSelect.addEventListener("change", function () {
-    state.grade = gradeSelect.value;
-    renderWhenReady();
-  });
-
-  titleInput.addEventListener("input", function () {
-    state.title = titleInput.value;
-    renderWhenReady();
-  });
-
-  captionInput.addEventListener("input", function () {
-    state.caption = captionInput.value;
-    renderWhenReady();
-  });
-
-  photoSizeInput.addEventListener("input", function () {
-    state.photoSize = Number(photoSizeInput.value);
-    renderWhenReady();
-  });
-
-  photoYInput.addEventListener("input", function () {
-    state.photoY = Number(photoYInput.value);
-    renderWhenReady();
-  });
-
   for (const btn of plateButtons) {
-    btn.addEventListener("click", function () {
-      setPlate(btn.getAttribute("data-plate"), true);
-    });
+    const active = btn.dataset.plate === key;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   }
+}
 
-  photoInput.addEventListener("change", function () {
-    if (photoInput.files && photoInput.files[0]) {
-      loadPhotoFile(photoInput.files[0]);
-    }
-  });
+function applyQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const size = params.get('size');
+  if (size && Object.hasOwn(COVER_SIZES, size)) {
+    state.sizeKey = size;
+    sizePick.value = size;
+  }
+  const plate = params.get('plate');
+  if (plate === 'sunset' || plate === 'neon') setPlate(plate, false);
+  const grade = params.get('grade');
+  if (grade === 'sunset' || grade === 'neon' || grade === 'none') {
+    state.grade = grade;
+    gradePick.value = grade;
+  }
+  const title = params.get('title');
+  if (title !== null) {
+    state.title = title.slice(0, 60);
+    titleField.value = state.title;
+  }
+  const caption = params.get('caption');
+  if (caption !== null) {
+    state.caption = caption.slice(0, 48);
+    captionField.value = state.caption;
+  }
+  const shot = params.get('shot');
+  if (shot === 'cover' || shot === 'editor') {
+    shotMode = shot;
+    if (shot === 'cover') document.body.classList.add('shot-cover');
+  }
+  const sample = params.get('sample');
+  const photo = params.get('photo');
+  const wanted = photo || sample;
+  if (wanted && /^[a-z0-9-]+$/i.test(wanted)) {
+    return loadPhotoFromUrl(`samples/${wanted}.jpg`, `Sample photo loaded: ${wanted}.`);
+  }
+  return Promise.resolve();
+}
 
-  document.getElementById("sampleBoulevard").addEventListener("click", function () {
-    loadSample("boulevard");
-  });
+sizePick.addEventListener('change', () => {
+  state.sizeKey = sizePick.value;
+  render();
+});
 
-  document.getElementById("samplePier").addEventListener("click", function () {
-    loadSample("pier");
-  });
+gradePick.addEventListener('change', () => {
+  state.grade = gradePick.value;
+  render();
+});
 
-  exportBtn.addEventListener("click", function () {
+titleField.addEventListener('input', () => {
+  state.title = titleField.value;
+  render();
+});
+
+captionField.addEventListener('input', () => {
+  state.caption = captionField.value;
+  render();
+});
+
+photoScale.addEventListener('input', () => {
+  state.photoSize = Number(photoScale.value);
+  render();
+});
+
+photoLift.addEventListener('input', () => {
+  state.photoY = Number(photoLift.value);
+  render();
+});
+
+for (const btn of plateButtons) {
+  btn.addEventListener('click', () => {
+    setPlate(btn.dataset.plate, true);
     render();
-    canvas.toBlob(function (blob) {
-      if (!blob) {
-        setStatus("Export failed in this browser.");
-        return;
+  });
+}
+
+choosePhotoBtn.addEventListener('click', () => photoInput.click());
+
+photoInput.addEventListener('change', () => {
+  const [file] = photoInput.files;
+  if (file) loadPhotoFromFile(file);
+  photoInput.value = '';
+});
+
+sampleBoulevardBtn.addEventListener('click', () => {
+  loadPhotoFromUrl('samples/boulevard.jpg', 'Sample photo loaded: boulevard.');
+});
+
+samplePierBtn.addEventListener('click', () => {
+  loadPhotoFromUrl('samples/pier.jpg', 'Sample photo loaded: pier.');
+});
+
+let dragDepth = 0;
+window.addEventListener('dragenter', (event) => {
+  event.preventDefault();
+  dragDepth += 1;
+  document.body.classList.add('dragging');
+});
+window.addEventListener('dragover', (event) => {
+  event.preventDefault();
+});
+window.addEventListener('dragleave', (event) => {
+  event.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) document.body.classList.remove('dragging');
+});
+window.addEventListener('drop', (event) => {
+  event.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove('dragging');
+  const file = event.dataTransfer && event.dataTransfer.files[0];
+  if (file) loadPhotoFromFile(file);
+});
+
+exportBtn.addEventListener('click', () => {
+  render();
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      say('Export failed — please try again.');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `vice-cover-${state.sizeKey}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    say(`Exported PNG at ${canvas.width} x ${canvas.height}. Check your downloads.`);
+  }, 'image/png');
+});
+
+async function start() {
+  say('Loading scenes and type…');
+  const fontReady = Promise.race([
+    (async () => {
+      try {
+        await document.fonts.load('400 80px Anton');
+        await document.fonts.ready;
+      } catch {
+        // Fall back to the system stack; the cover still renders.
       }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "vice-cover-" + state.sizeKey + ".png";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      setStatus("PNG exported at " + canvas.width + " x " + canvas.height + ".");
-    }, "image/png");
-  });
-
-  window.addEventListener("dragover", function (event) {
-    event.preventDefault();
-    document.body.classList.add("dragging");
-  });
-
-  window.addEventListener("dragleave", function (event) {
-    if (!event.relatedTarget) {
-      document.body.classList.remove("dragging");
-    }
-  });
-
-  window.addEventListener("drop", function (event) {
-    event.preventDefault();
-    document.body.classList.remove("dragging");
-    const files = event.dataTransfer ? event.dataTransfer.files : null;
-    if (files && files[0]) {
-      loadPhotoFile(files[0]);
-    }
-  });
+    })(),
+    new Promise((resolvePromise) => setTimeout(resolvePromise, 2500)),
+  ]);
+  const platesReady = Promise.allSettled([
+    loadImage('plates/sunset.jpg').then((img) => { assets.plates.sunset = img; }),
+    loadImage('plates/neon.jpg').then((img) => { assets.plates.neon = img; }),
+  ]);
+  await Promise.all([fontReady, platesReady]);
+  render();
+  say('Ready. Add a photo, tweak the words, then export your cover.');
+  await applyQuery();
+  render();
 }
 
-function start() {
-  applyQueryParams();
-  bindControls();
-  syncPlateButtons();
-
-  const plateLoads = Object.keys(PLATE_PATHS).map(function (key) {
-    return loadImage(PLATE_PATHS[key]).then(function (img) {
-      plateImages[key] = img;
-    }).catch(function () {
-      plateImages[key] = null;
-    });
-  });
-
-  const fontLoad = document.fonts && document.fonts.load
-    ? document.fonts.load("400 64px Anton").then(function () {
-        return document.fonts.ready;
-      })
-    : Promise.resolve();
-
-  Promise.all(plateLoads.concat([fontLoad])).then(function () {
-    fontReady = true;
-    assets.plateImg = plateImages[state.plate] || null;
-    render();
-    setStatus("Ready. Add a photo, then export your cover.");
-  }).catch(function () {
-    fontReady = true;
-    render();
-  });
-}
-
-start();
+start().catch(() => {
+  render();
+  say('Something hiccuped while loading, but the editor is still usable.');
+});
