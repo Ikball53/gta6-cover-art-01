@@ -4,28 +4,23 @@
 
 # Vice Cover Maker
 
-Turn your own photos into a cinematic, 3D-realistic game-cover poster: layered
-sunset (or neon night) scene with real depth, soft shadows, wet-ground
-reflections, a red sports car, your photo kept photorealistic, and a bold
-condensed title. Export a PNG at 1080×1080, 1080×1350, or 1920×1080.
-
-Everything runs locally in the browser — photos never leave your device.
+Vice Cover Maker turns a photo and a caption into cinematic game-cover poster art, right in the browser. Your picture is set as a photorealistic inset over a layered sunset or neon scene, finished with a bold condensed title and a matching colour grade. When it looks right, export a crisp PNG at 1080x1080, 1080x1350 or 1920x1080. Everything runs locally on your machine — your photo never leaves the page.
 
 ## Run
 
-Serve the `app/` folder with any static file server and open `index.html`,
-for example:
+Serve the `app/` folder with any static file server and open `index.html`. For example:
 
-```bash
+```sh
 cd app
 python3 -m http.server 8000
-# then open http://localhost:8000 in a browser
 ```
+
+Then visit http://localhost:8000 in your browser. No build step and no internet connection are needed.
 
 ## How to use
 
-1. Add one or more photos (file picker or drag-and-drop), or click Load Sample.
-2. Type a caption, pick a size and a grade (Sunset / Neon Night).
-3. Drag photos to move them, use the mouse wheel or slider to scale, and hold
-   Shift while dragging to pan the crop inside the frame.
-4. Click Export PNG to download the cover at the chosen size.
+1. Add a photo with the file picker, drag and drop an image onto the page, or load one of the built-in samples.
+2. Type your title and caption.
+3. Pick an export size, a background scene and a colour grade.
+4. Adjust the photo size and photo position sliders until the layout feels right.
+5. Click **Export PNG** to download your finished cover.
