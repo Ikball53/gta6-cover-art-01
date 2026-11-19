@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vice Cover Maker</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <h1>Vice Cover Maker</h1>
+  </div>
+  <p class="tagline">Turn a photo into bold poster cover art.</p>
+</header>
+
+<main class="layout">
+  <section class="stage" id="stage">
+    <div class="canvas-frame">
+      <canvas id="coverCanvas" width="1920" height="1080"></canvas>
+    </div>
+    <div class="drop-hint" id="dropHint">Drop a photo anywhere to use it</div>
+  </section>
+
+  <aside class="panel" aria-label="Cover controls">
+    <div class="panel-block">
+      <label class="field-label" for="sizeSelect">Export size</label>
+      <select id="sizeSelect">
+        <option value="landscape" selected>Landscape 1920 x 1080</option>
+        <option value="portrait">Portrait 1080 x 1350</option>
+        <option value="square">Square 1080 x 1080</option>
+      </select>
+    </div>
+
+    <div class="panel-block">
+      <span class="field-label" id="plateLabel">Background scene</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="plateLabel">
+        <button type="button" class="seg-btn is-active" id="plateSunset" data-plate="sunset" aria-pressed="true">Sunset Beach</button>
+        <button type="button" class="seg-btn" id="plateNeon" data-plate="neon" aria-pressed="false">Neon Street</button>
+      </div>
+    </div>
+
+    <div class="panel-block">
+      <span class="field-label">Photo</span>
+      <div class="photo-actions">
+        <label class="file-btn" for="photoInput">Choose a photo</label>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+        <button type="button" class="ghost-btn" id="sampleBoulevard">Sample: Boulevard</button>
+        <button type="button" class="ghost-btn" id="samplePier">Sample: Pier</button>
+      </div>
+      <p class="hint">Or drag and drop an image onto the page.</p>
+    </div>
+
+    <div class="panel-block">
+      <label class="field-label" for="photoSize">Photo size</label>
+      <input type="range" id="photoSize" min="30" max="80" step="1" value="52">
+      <label class="field-label" for="photoY">Photo position</label>
+      <input type="range" id="photoY" min="0" max="100" step="1" value="42">
+    </div>
+
+    <div class="panel-block">
+      <label class="field-label" for="titleInput">Title</label>
+      <input type="text" id="titleInput" value="GRAND THEFT AUTO VI" maxlength="60" autocomplete="off">
+      <label class="field-label" for="captionInput">Caption</label>
+      <input type="text" id="captionInput" value="" maxlength="48" placeholder="Your caption" autocomplete="off">
+    </div>
+
+    <div class="panel-block">
+      <label class="field-label" for="gradeSelect">Colour grade</label>
+      <select id="gradeSelect">
+        <option value="sunset" selected>Sunset</option>
+        <option value="neon">Neon</option>
+        <option value="none">None</option>
+      </select>
+    </div>
+
+    <button type="button" class="export-btn" id="exportBtn">Export PNG</button>
+    <p class="status" id="statusLine" role="status"></p>
+  </aside>
+</main>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

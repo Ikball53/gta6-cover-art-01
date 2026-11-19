@@ -1,0 +1,253 @@
+@font-face {
+  font-family: "Anton";
+  src: url("fonts/Anton-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0d0f14;
+  color: #eef0f4;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 12px 28px 8px;
+  border-bottom: 1px solid #22262f;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ff9a3d 0%, #ff4d7e 55%, #7b5cff 100%);
+  box-shadow: 0 4px 14px rgba(255, 77, 126, 0.35);
+  flex: none;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.02em;
+  font-weight: 800;
+}
+
+.tagline {
+  margin: 0;
+  color: #9aa3b2;
+  font-size: 14px;
+}
+
+.layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 16px 28px 26px;
+  max-width: 1560px;
+  margin: 0 auto;
+}
+
+.stage {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.canvas-frame {
+  background: #05060a;
+  border: 1px solid #262b36;
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+#coverCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  background: #11141b;
+}
+
+.drop-hint {
+  margin-top: 12px;
+  color: #8b94a5;
+  font-size: 13px;
+  text-align: center;
+}
+
+body.dragging .canvas-frame {
+  border-color: #ff4d7e;
+  box-shadow: 0 0 0 3px rgba(255, 77, 126, 0.35), 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.panel {
+  flex: 0 0 320px;
+  background: #14171f;
+  border: 1px solid #262b36;
+  border-radius: 14px;
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.panel-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #aeb6c4;
+}
+
+select,
+input[type="text"] {
+  width: 100%;
+  background: #0d0f14;
+  color: #eef0f4;
+  border: 1px solid #2c313d;
+  border-radius: 9px;
+  padding: 10px 11px;
+  font-size: 14px;
+  outline: none;
+}
+
+select:focus,
+input[type="text"]:focus {
+  border-color: #ff4d7e;
+  box-shadow: 0 0 0 3px rgba(255, 77, 126, 0.22);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #ff4d7e;
+}
+
+.segmented {
+  display: flex;
+  background: #0d0f14;
+  border: 1px solid #2c313d;
+  border-radius: 10px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.seg-btn {
+  flex: 1;
+  border: 0;
+  border-radius: 7px;
+  padding: 9px 6px;
+  background: transparent;
+  color: #9aa3b2;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.seg-btn.is-active {
+  background: linear-gradient(135deg, #ff9a3d, #ff4d7e);
+  color: #ffffff;
+}
+
+.photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-btn {
+  display: inline-block;
+  background: #ff4d7e;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 13px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.file-btn:hover {
+  background: #ff6390;
+}
+
+.ghost-btn {
+  background: #1b1f29;
+  color: #dfe4ee;
+  border: 1px solid #2c313d;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.ghost-btn:hover {
+  border-color: #ff4d7e;
+}
+
+.hint {
+  margin: 0;
+  color: #8b94a5;
+  font-size: 12px;
+}
+
+.export-btn {
+  border: 0;
+  border-radius: 11px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #ffb03d, #ff4d7e 60%, #7b5cff);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(255, 77, 126, 0.3);
+}
+
+.export-btn:hover {
+  filter: brightness(1.07);
+}
+
+.export-btn:active {
+  transform: translateY(1px);
+}
+
+.status {
+  margin: 0;
+  min-height: 18px;
+  color: #8fd3a7;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .panel {
+    flex: none;
+    width: 100%;
+  }
+}
