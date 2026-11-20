@@ -1,35 +1,29 @@
-// Vice Cover Maker — entry hand-in program.
-// Copies app/ and screenshots/ from the repository root into the output
-// directory and writes dossier.json there with buildDossier. Node 22,
-// standard library only. Deterministic: no timestamps, no randomness,
-// so two runs write identical bytes.
+// Vice Cover Maker entry program: copies app/ and screenshots/ to the output
+// directory and writes dossier.json via buildDossier. Deterministic output:
+// the same inputs always produce the same bytes.
 
-import { cpSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildDossier } from './vendor/makefun-app.ts';
 
-const repoRoot = resolve(import.meta.dirname);
+const repoRoot = resolve(import.meta.dirname ?? '.');
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR
   ? resolve(process.env.MAKEFUN_OUTPUT_DIR)
   : '/output';
 
-/** Fail early with a clear message when a required input directory is absent. */
-function requireInputDir(name) {
-  const dir = join(repoRoot, name);
-  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
-    throw new Error(`Vice Cover Maker: missing required directory ${name}/ beside main.ts`);
+function copyEntryTree(name: string): void {
+  const source = join(repoRoot, name);
+  const target = join(outputDir, name);
+  if (source === target) {
+    throw new Error(`refusing to copy ${name} onto itself`);
   }
-  return dir;
+  cpSync(source, target, { recursive: true });
 }
 
 mkdirSync(outputDir, { recursive: true });
 
-for (const name of ['app', 'screenshots']) {
-  cpSync(requireInputDir(name), join(outputDir, name), {
-    recursive: true,
-    dereference: false,
-  });
-}
+copyEntryTree('app');
+copyEntryTree('screenshots');
 
 const dossier = buildDossier(outputDir, {
   text_max_bytes: 163840,
