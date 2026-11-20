@@ -1,98 +1,62 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vice Cover Maker</title>
 <link rel="stylesheet" href="style.css">
-<style>
-@font-face {
-  font-family: "Anton";
-  src: url("fonts/Anton-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-</style>
 </head>
 <body>
 <header class="topbar">
-  <h1 class="brand">VICE COVER MAKER</h1>
-  <p class="tagline">Turn your photos into GTA-style cover art — sunset or neon, exported as PNG.</p>
+  <h1 class="brand">Vice Cover Maker</h1>
+  <p class="tagline">Your photos. Your caption. Poster-grade cover art.</p>
 </header>
-
 <main class="layout">
-  <section class="stage">
-    <canvas id="coverCanvas" width="1080" height="1080"></canvas>
-    <p class="hint">Drag a photo inside its panel to move it. Use the panel zoom slider or mouse wheel over the canvas to scale the selected panel.</p>
+  <section class="controls" aria-label="Editor controls">
+    <div class="control-group">
+      <label for="photoInput">Photos</label>
+      <input id="photoInput" type="file" accept="image/*" multiple>
+      <p class="hint">Pick one photo to fill every panel, or several for a collage. Photos never leave your machine.</p>
+    </div>
+    <div class="control-group">
+      <label for="sizeSelect">Export size</label>
+      <select id="sizeSelect">
+        <option value="1080x1080" selected>1080 x 1080 (square)</option>
+        <option value="1080x1350">1080 x 1350 (portrait)</option>
+        <option value="1920x1080">1920 x 1080 (landscape)</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="gradeSelect">Colour grade</label>
+      <select id="gradeSelect">
+        <option value="sunset" selected>Sunset</option>
+        <option value="neon">Neon</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="captionInput">Caption</label>
+      <input id="captionInput" type="text" value="VICE CITY" maxlength="28" autocomplete="off">
+      <label for="subtitleInput">Subtitle</label>
+      <input id="subtitleInput" type="text" value="A POSTER STORY" maxlength="40" autocomplete="off">
+    </div>
+    <div class="control-group">
+      <label for="panelSelect">Panel to adjust</label>
+      <select id="panelSelect">
+        <option value="0" selected>Main panel</option>
+        <option value="1">Panel 2</option>
+        <option value="2">Panel 3</option>
+      </select>
+      <label for="zoomRange">Photo zoom</label>
+      <input id="zoomRange" type="range" min="1" max="2.5" step="0.01" value="1">
+      <p class="hint">Drag a photo on the preview to reposition it. Use the slider to zoom the selected panel.</p>
+    </div>
+    <button id="exportButton" type="button">Export PNG</button>
   </section>
-
-  <aside class="controls">
-    <div class="group">
-      <h2>Photos</h2>
-      <label class="file-label">Add photos (one fills every panel)
-        <input id="photoInput" type="file" accept="image/*" multiple>
-      </label>
-      <div class="row">
-        <button id="useSamplePier" type="button">Sample: Pier</button>
-        <button id="useSampleBoulevard" type="button">Sample: Boulevard</button>
-      </div>
-      <p class="note">Photos are read on your machine only — never uploaded.</p>
-    </div>
-
-    <div class="group">
-      <h2>Caption</h2>
-      <label>Cover title
-        <input id="captionInput" type="text" value="SUNSET HEIST" maxlength="42">
-      </label>
-      <label>Subtitle (optional)
-        <input id="subtitleInput" type="text" value="VICE CITY STORIES" maxlength="48">
-      </label>
-    </div>
-
-    <div class="group">
-      <h2>Look</h2>
-      <label>Colour grade
-        <select id="gradeSelect">
-          <option value="sunset" selected>Vice City sunset</option>
-          <option value="neon">Neon magenta / cyan</option>
-        </select>
-      </label>
-      <label>Export size
-        <select id="sizeSelect">
-          <option value="1080x1080" selected>Square — 1080 x 1080</option>
-          <option value="1080x1350">Portrait — 1080 x 1350</option>
-          <option value="1920x1080">Landscape — 1920 x 1080</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="group">
-      <h2>Panels</h2>
-      <label>Selected panel
-        <select id="panelSelect">
-          <option value="0">Hero panel</option>
-          <option value="1">Panel 2</option>
-          <option value="2">Panel 3</option>
-          <option value="3">Panel 4</option>
-        </select>
-      </label>
-      <label>Zoom <span id="zoomValue">100%</span>
-        <input id="zoomRange" type="range" min="60" max="300" value="100">
-      </label>
-      <div class="row">
-        <button id="centerPanel" type="button">Center photo</button>
-        <button id="fillAll" type="button">Use one photo everywhere</button>
-      </div>
-    </div>
-
-    <button id="exportBtn" class="export" type="button">Export PNG</button>
-    <p id="statusLine" class="status" role="status"></p>
-  </aside>
+  <section class="preview" aria-label="Cover preview">
+    <canvas id="coverCanvas" width="1080" height="1080"></canvas>
+    <p class="preview-note">Live preview. Export renders at full size.</p>
+  </section>
 </main>
-
-<footer class="foot">Vice Cover Maker — an original cover-art toy. Not affiliated with Rockstar Games.</footer>
-
 <script type="module" src="src/main.js"></script>
 </body>
 </html>
